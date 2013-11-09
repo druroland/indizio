@@ -3,8 +3,7 @@
 //Debug
 $debug = FALSE;
 //Campaign setup
-$defaultPhone = 'XXXXXXXXXXX'; //catch-all
-$campaignPost = 'https://leads.versachannel.com/genericPostlead.php';
+$campaignPost = 'http://post.leadmesh.net/1e7087523d05ab0d8ff2fdf3cd8cdea3b050807e1ede19722814cc74058ba7c8';
 //Vicidial API setup
 $source='test';
 $user='8888';
@@ -49,16 +48,6 @@ if (isset($fmb) && ($fmb > 0)) {
 } else {
     $loantovalue = 0;
 }
-
-//**********************************AMI query*******************************************
-// ping AMIPull.php on all mediamixXX.ytel.com servers
-// $callcountArray
-
-// Filter out non-calls
-
-// Count uniques
-
-//Build CALL COUNT array to send to leadmesh
 
 //************************************************ARRAY CREATION***********************************
 //We want to update our records first, send call count and data to leadmesh second, and dial with customer last
@@ -116,25 +105,11 @@ $dataArray = array(
     Unsecured_Debt          => $_GET['unsecured_debt'],
 );
 if ($debug){ print_r($dataArray);}
-//Build VOICE DELIVERY array
-$voiceArray = array (
-    'source'                => $source,
-    'user'                  => $user,
-    'pass'                  => $pass,
-    'agent_user'            => $user_agent,
-    'function'              => 'transfer_conference',
-    'value'                 => 'DIAL_WITH_CUSTOMER',
-    'phone_number'          => $transferNumber,
-    'dial_override'         => 'YES',
-);
-//if ($debug){ print_r($voiceArray);}
+
 //url-ify the data array
 //DATA UPDATE
 foreach($updateArray as $key=>$value) { $updateArray_string .= $key.'='.$value.'&'; }
 rtrim($updateArray_string, '&');
-//CALL COUNT DELIVERY
-foreach($callcountArray as $key=>$value) { $callcountArray_string .= $key.'='.$value.'&'; }
-rtrim($callcountArray_string, '&');
 //DATA DELIVERY
 foreach($dataArray as $key=>$value) { $dataArray_string .= $key.'='.$value.'&'; }
 rtrim($dataArray_string, '&');
@@ -142,20 +117,6 @@ rtrim($dataArray_string, '&');
 foreach($voiceArray as $key=>$value) { $voiceArray_string .= $key.'='.$value.'&'; }
 rtrim($voiceArray_string, '&');
 
-
-
-
-
-//**********************************LeadMesh response & processing*********************************
-// Get XML response & parse to variables
-
-//Set customer name
-
-//Set transfer number
-$transferNumber = $_GET[''];
-
-
-//******************************************DELIVERY TIME******************************************
 if (!$debug) {
 //open connection
     $ch = curl_init();
@@ -166,13 +127,66 @@ if (!$debug) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 //execute post
     $result = curl_exec($ch);
+
+
 //POST for DATA DELIVERY
     curl_setopt($ch,CURLOPT_URL, $campaignPost);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 30);
+    curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch,CURLOPT_POST, count($dataArray));
     curl_setopt($ch,CURLOPT_POSTFIELDS, $dataArray_string);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 //execute post
-    $result = curl_exec($ch);
+    $response = curl_exec($ch);
+//**********************************LeadMesh data delivery and transfer number accept**************
+// Get XML response & parse to variables
+    try {
+        // disable standard libxml errors, in case of bad xml, exception will be thrown
+        libxml_use_internal_errors(1);
+        $sxe = new SimpleXMLElement($response);
+        libxml_use_internal_errors(0);
+    } catch (Exception $e) {
+        // @todo handle xml parsing exception
+        exit;
+    }
+// hack to convert SimpleXMLElement object to array
+    $response = json_decode(json_encode($sxe), true);
+
+    /**
+     * In case of success, $response variable should contain:
+     *
+     *   array(
+     *     'response' => 'Accepted',
+     *     'company' => 'This Company Inc.',
+     *     'phone' => '1-800-123-4567',
+     *   )
+     *
+     * or if failure, then
+     *
+     *   array(
+     *     'response' => 'No Coverage'
+     *   )
+     */
+//Process response and set transferNumber
+$LMresponse = var_dump($response["response"]);
+if ($LMresponse = "No Coverage") {exit ("No Match for Delivery");}
+
+$LMcompany = var_dump($response["company"]);
+$transferNumber = var_dump($response["phone"]);
+//Build VOICE DELIVERY array
+    $voiceArray = array (
+        'source'                => $source,
+        'user'                  => $user,
+        'pass'                  => $pass,
+        'agent_user'            => $user_agent,
+        'function'              => 'transfer_conference',
+        'value'                 => 'DIAL_WITH_CUSTOMER',
+        'phone_number'          => $transferNumber,
+        'dial_override'         => 'YES',
+    );
+//if ($debug){ print_r($voiceArray);}
+
 //POST for VOICE DELIVERY
     curl_setopt($ch,CURLOPT_URL, $voicePost);
     curl_setopt($ch,CURLOPT_POST, count($voiceArray));
