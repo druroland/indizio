@@ -6,8 +6,8 @@ $debug = FALSE;
 $campaignPost = 'http://post.leadmesh.net/1e7087523d05ab0d8ff2fdf3cd8cdea3b050807e1ede19722814cc74058ba7c8';
 //Vicidial API setup
 $source='test';
-$user='8888';
-$pass='APIadminMedia365';
+$user='XXXX';
+$pass='XXXX';
 $user_agent=$_GET['user'];
 $leadUpdate = 'http://mediamix.ytel.com/non_agent_api.php';
 $voicePost = 'http://mediamix.ytel.com/agc/api.php';
