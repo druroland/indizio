@@ -1,7 +1,5 @@
 <?php
 //***********************************Set defaults***************************************
-//Debug
-$debug = FALSE;
 //Campaign setup
 $campaignPost = 'http://post.leadmesh.net/1e7087523d05ab0d8ff2fdf3cd8cdea3b050807e1ede19722814cc74058ba7c8';
 //Vicidial API setup
@@ -63,7 +61,8 @@ $updateArray=array(
     'custom_fields'         => 'Y',
     'loantovalue'           => $loantovalue
 );
-//if ($debug){ print_r($updateArray);}
+foreach($updateArray as $key=>$value) { $updateArray_string .= $key.'='.$value.'&'; }
+rtrim($updateArray_string, '&');
 
 //Build DATA DELIVERY array
 $dataArray = array(
@@ -104,20 +103,9 @@ $dataArray = array(
     LTV                     => $loantovalue,
     Unsecured_Debt          => $_GET['unsecured_debt'],
 );
-if ($debug){ print_r($dataArray);}
-
-//url-ify the data array
-//DATA UPDATE
-foreach($updateArray as $key=>$value) { $updateArray_string .= $key.'='.$value.'&'; }
-rtrim($updateArray_string, '&');
-//DATA DELIVERY
 foreach($dataArray as $key=>$value) { $dataArray_string .= $key.'='.$value.'&'; }
 rtrim($dataArray_string, '&');
-//VOICE DELIVERY
-foreach($voiceArray as $key=>$value) { $voiceArray_string .= $key.'='.$value.'&'; }
-rtrim($voiceArray_string, '&');
 
-if (!$debug) {
 //open connection
     $ch = curl_init();
 //POST for DATA UPDATE
@@ -126,9 +114,12 @@ if (!$debug) {
     curl_setopt($ch,CURLOPT_POSTFIELDS, $updateArray_string);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 //execute post
-    $result = curl_exec($ch);
+    $dataResult = curl_exec($ch);
+//close connection
+curl_close($ch);
 
-
+//open connection
+$ch = curl_init();
 //POST for DATA DELIVERY
     curl_setopt($ch,CURLOPT_URL, $campaignPost);
     curl_setopt($ch, CURLOPT_TIMEOUT, 30);
@@ -139,6 +130,8 @@ if (!$debug) {
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 //execute post
     $response = curl_exec($ch);
+
+
 //**********************************LeadMesh data delivery and transfer number accept**************
 // Get XML response & parse to variables
     try {
@@ -168,12 +161,34 @@ if (!$debug) {
      *     'response' => 'No Coverage'
      *   )
      */
-//Process response and set transferNumber
-$LMresponse = var_dump($response["response"]);
-if ($LMresponse = "No Coverage") {exit ("No Match for Delivery");}
 
-$LMcompany = var_dump($response["company"]);
-$transferNumber = var_dump($response["phone"]);
+//close connection
+curl_close($ch);
+//Process response and set transferNumber
+ob_start();
+echo $response['response'];
+$transferNumber = ob_get_contents();
+ob_end_clean();
+$LMresponse = var_dump($response["response"]);
+if ($LMresponse == "No Coverage") {exit ("No Match for Delivery");}
+
+ob_start();
+echo $response['phone'];
+$transferNumber = ob_get_contents();
+ob_end_clean();
+
+ob_start();
+echo $response['company'];
+$LMcompany = ob_get_contents();
+ob_end_clean();
+
+//Strip number formatting
+$transferNumber = preg_replace('/\D+/', '', $transferNumber);
+// Add a 9
+$transferNumber = str_pad($transferNumber, 12, "9", STR_PAD_LEFT);
+
+echo "Transfer Number: $transferNumber";
+
 //Build VOICE DELIVERY array
     $voiceArray = array (
         'source'                => $source,
@@ -185,17 +200,18 @@ $transferNumber = var_dump($response["phone"]);
         'phone_number'          => $transferNumber,
         'dial_override'         => 'YES',
     );
-//if ($debug){ print_r($voiceArray);}
+    foreach($voiceArray as $key=>$value) { $voiceArray_string .= $key.'='.$value.'&'; }
+    rtrim($voiceArray_string, '&');
 
+//open connection
+$ch = curl_init();
 //POST for VOICE DELIVERY
-    curl_setopt($ch,CURLOPT_URL, $voicePost);
-    curl_setopt($ch,CURLOPT_POST, count($voiceArray));
-    curl_setopt($ch,CURLOPT_POSTFIELDS, $voiceArray_string);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+curl_setopt($ch,CURLOPT_URL, $voicePost);
+curl_setopt($ch,CURLOPT_POST, count($voiceArray));
+curl_setopt($ch,CURLOPT_POSTFIELDS, $voiceArray_string);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 //execute post
-    $result = curl_exec($ch);
+$result = curl_exec($ch);
 //close connection
-    curl_close($ch);
-} else { echo 'Debug mode enabled, no deliveries occurred'; }
-//Escort Elvis from the building
+curl_close($ch);
 ?>
